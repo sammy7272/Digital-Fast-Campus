@@ -1,0 +1,18 @@
+# Render Blueprint: the multiplayer server (WebSockets) built from server/Dockerfile.
+services:
+  - type: web
+    name: pixel-fast-server
+    runtime: docker
+    dockerfilePath: ./server/Dockerfile
+    dockerContext: .
+    plan: free
+    healthCheckPath: /health
+    envVars:
+      - key: ALLOWED_ORIGINS        # your Vercel URL, e.g. https://digital-fast-campus.vercel.app
+        sync: false
+      - key: TRUST_PROXY
+        value: "1"
+      - key: MAX_CLIENTS
+        value: "3000"
+      - key: MAX_PER_IP
+        value: "10"
