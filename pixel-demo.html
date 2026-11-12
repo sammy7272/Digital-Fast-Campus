@@ -1,0 +1,229 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Pixel Campus Demo</title>
+<style>
+  html, body { margin: 0; background: #1b1b22; color: #eee; font-family: monospace; }
+  #wrap { display: flex; flex-direction: column; align-items: center; gap: 10px; padding: 12px; }
+  canvas { image-rendering: pixelated; width: min(96vw, 1440px); aspect-ratio: 480 / 270; cursor: pointer; border: 4px solid #000; }
+  button { font: inherit; padding: 6px 12px; background: #f3c94b; border: 3px solid #000; cursor: pointer; }
+</style>
+</head>
+<body>
+<div id="wrap">
+  <canvas id="c" width="480" height="270"></canvas>
+  <div><button id="night">Toggle day / night</button> &nbsp; click anywhere on the grass or path to walk</div>
+</div>
+<script>
+// Everything below is drawn in code: no image files. 480x270 art pixels, scaled up with crisp pixels.
+const cv = document.getElementById('c'), ctx = cv.getContext('2d');
+const W = 480, H = 270;
+const hash = (x, y) => {
+  let h = Math.imul(x | 0, 374761393) + Math.imul(y | 0, 668265263);
+  h = Math.imul(h ^ (h >>> 13), 1274126177);
+  return ((h ^ (h >>> 16)) >>> 0) / 4294967296;
+};
+const P = (g, c, x, y, w = 1, h = 1) => { g.fillStyle = c; g.fillRect(x | 0, y | 0, w, h); };
+const sprite = (w, h, fn) => { const c = document.createElement('canvas'); c.width = w; c.height = h; fn(c.getContext('2d')); return c; };
+
+// ---------- layout ----------
+const B = { x0: 140, x1: 340, roof0: 30, face0: 52, y1: 150 };     // building
+const PATH = { y0: 196, y1: 216 }, WALK = { x0: 228, x1: 252 };      // paths
+const treeSpots = [[40,120],[80,92],[28,62],[422,112],[456,72],[392,58],[104,252],[184,258],[300,252],[380,262],[460,248],[18,170]];
+const lamps = [[120,194],[360,194]];
+const windows = [];
+for (const wy of [58, 80, 102]) for (let wx = 150; wx <= 322; wx += 19) windows.push({ x: wx, y: wy, lit: hash(wx, wy) > 0.42 });
+
+// ---------- ground (per pixel, once) ----------
+function paintGround(g) {
+  const img = g.createImageData(W, H), d = img.data;
+  for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
+    const r = hash(x, y), patch = hash(x >> 4, y >> 4) < 0.3 ? -7 : 0;
+    let c = [90 + patch, 143 + patch, 60 + patch];
+    if (r < 0.08) c = [76, 125, 50];
+    else if (r > 0.94) c = [108, 162, 72];
+    if (r > 0.9988) c = hash(x, y + 7) > 0.5 ? [245, 240, 220] : [240, 205, 80];   // flowers
+    const onH = y >= PATH.y0 && y < PATH.y1, onV = x >= WALK.x0 && x < WALK.x1 && y >= B.y1 && y < PATH.y0;
+    if (onH || onV) {
+      const lx = onV ? x - WALK.x0 : x, ly = onV ? y : y - PATH.y0;
+      const seam = lx % 12 === 0 || ly % 10 === 0;
+      const edge = onH ? (y === PATH.y0 || y === PATH.y1 - 1) : (x === WALK.x0 || x === WALK.x1 - 1);
+      c = edge ? [150, 135, 110] : seam ? [179, 162, 131] : [201, 184, 154];
+      if (!edge && r < 0.06) c = [188, 172, 142];
+    }
+    const i = (y * W + x) * 4; d[i] = c[0]; d[i + 1] = c[1]; d[i + 2] = c[2]; d[i + 3] = 255;
+  }
+  g.putImageData(img, 0, 0);
+}
+
+// ---------- building ----------
+function paintBuilding(g, night) {
+  // cast shadow
+  g.fillStyle = 'rgba(0,0,0,.22)';
+  g.fillRect(B.x1, B.roof0 + 8, 12, B.y1 - B.roof0 - 2);
+  g.fillRect(B.x0 + 6, B.y1, B.x1 - B.x0 + 6, 6);
+  // roof
+  P(g, '#5d6270', B.x0, B.roof0, B.x1 - B.x0, B.face0 - B.roof0);
+  P(g, '#7a8090', B.x0, B.roof0, B.x1 - B.x0, 2);
+  P(g, '#3e4250', B.x0, B.face0 - 1, B.x1 - B.x0, 1);
+  for (let x = B.x0 + 4; x < B.x1 - 4; x += 6) if (hash(x, 3) < 0.25) P(g, '#555a67', x, B.roof0 + 4, 3, 14);
+  [[160, 36], [290, 38]].forEach(([x, y]) => { P(g, '#2e313b', x - 1, y - 1, 16, 12); P(g, '#9aa0ad', x, y, 14, 10); P(g, '#c0c5cf', x, y, 14, 2); P(g, '#6b707c', x + 3, y + 4, 8, 4); }); // AC units
+  P(g, '#cfd3da', 220, 34, 40, 4);  // skylight
+  // brick facade
+  for (let y = B.face0; y < B.y1; y++) for (let x = B.x0; x < B.x1; x++) {
+    const row = Math.floor((y - B.face0) / 4), mortarH = (y - B.face0) % 4 === 3;
+    const mortarV = (x + (row % 2) * 4) % 8 === 0;
+    const r = hash(x * 3, y * 5);
+    P(g, mortarH || mortarV ? '#8e4430' : r < 0.15 ? '#9c4c33' : r > 0.9 ? '#bb6447' : '#a8553a', x, y);
+  }
+  P(g, '#7d3b2a', B.x1 - 2, B.face0, 2, B.y1 - B.face0);       // right edge shade
+  for (const ly of [76, 98, 120]) { P(g, '#d9ccb6', B.x0, ly, B.x1 - B.x0, 2); P(g, '#a8987f', B.x0, ly + 2, B.x1 - B.x0, 1); }
+  // windows
+  for (const w of windows) {
+    P(g, '#2b2b35', w.x, w.y, 12, 15);
+    const lit = night && w.lit;
+    P(g, lit ? '#ffd986' : '#8cc3e8', w.x + 1, w.y + 1, 10, 6);
+    P(g, lit ? '#f0b050' : '#5a8fbf', w.x + 1, w.y + 7, 10, 7);
+    P(g, '#2b2b35', w.x + 6, w.y + 1, 1, 13);
+    if (!lit) { P(g, '#d8f0ff', w.x + 2, w.y + 2); P(g, '#d8f0ff', w.x + 3, w.y + 3); P(g, '#d8f0ff', w.x + 2, w.y + 3); }
+    P(g, '#d9ccb6', w.x - 1, w.y + 15, 14, 1);
+  }
+  // entrance
+  P(g, '#2b2420', 226, 124, 28, 26);
+  P(g, night ? '#ffcf70' : '#34495e', 229, 128, 10, 22);
+  P(g, night ? '#ffcf70' : '#34495e', 241, 128, 10, 22);
+  if (!night) { P(g, '#5d7a96', 229, 128, 10, 3); P(g, '#5d7a96', 241, 128, 10, 3); }
+  P(g, '#e8e0d0', 222, 120, 36, 4); P(g, '#7a1a20', 230, 113, 20, 7); P(g, '#f3c94b', 232, 115, 16, 1); P(g, '#f3c94b', 232, 117, 10, 1);
+  P(g, '#bfb3a0', 224, 150, 32, 2); P(g, '#a89c88', 222, 152, 36, 2);   // steps
+  // hedges
+  for (const [x0, x1] of [[B.x0, 220], [260, B.x1]]) {
+    P(g, '#2c5626', x0, 153, x1 - x0, 6);
+    for (let x = x0; x < x1; x++) { if (hash(x, 153) < 0.6) P(g, '#4c8a3c', x, 153); if (hash(x, 154) < 0.3) P(g, '#62a44c', x, 154); }
+    for (let x = x0; x < x1; x += 7) if (hash(x, 9) < 0.5) P(g, '#e86a8a', x + 2, 155);
+  }
+}
+
+// ---------- tree / lamp sprites ----------
+function blob(g, cx, cy, r, col, seed) {
+  for (let y = -r; y <= r; y++) for (let x = -r; x <= r; x++) {
+    const d = x * x + y * y;
+    if (d > r * r) continue;
+    if (d > (r - 1.5) * (r - 1.5) && hash(x + seed, y * 7 + seed) < 0.35) continue;   // ragged leafy edge
+    P(g, col, cx + x, cy + y);
+  }
+}
+function makeTree(seed) {
+  const s = 0.85 + hash(seed, 1) * 0.3, R = Math.round(11 * s);
+  return sprite(34, 40, g => {
+    const bx = 17, by = 37;
+    g.fillStyle = 'rgba(0,0,0,.28)';
+    for (let y = -3; y <= 3; y++) for (let x = -11; x <= 11; x++) if (x * x / 121 + y * y / 9 <= 1) g.fillRect(bx + x + 3, by + y, 1, 1);
+    P(g, '#5b3a22', bx - 2, by - 9, 4, 9); P(g, '#7a4e2e', bx - 2, by - 9, 1, 9);
+    blob(g, bx, by - 17, R, '#2a5426', seed);
+    blob(g, bx - 2, by - 19, R - 2, '#3d7533', seed + 1);
+    blob(g, bx - 4, by - 22, Math.round(R / 2), '#5a9644', seed + 2);
+    for (let i = 0; i < 14; i++) P(g, '#78b058', bx - 8 + hash(seed, i) * 12, by - 28 + hash(i, seed) * 10);
+  });
+}
+const trees = treeSpots.map(([x, y], i) => ({ x, y, spr: makeTree(i * 31 + 7) }));
+
+function drawLamp(x, y, night) {
+  P(ctx, 'rgba(0,0,0,.25)', x - 3, y - 1, 7, 2);
+  P(ctx, '#2b2b35', x - 2, y - 2, 4, 2);
+  P(ctx, '#3a3a44', x - 1, y - 24, 2, 22); P(ctx, '#55555f', x - 1, y - 24, 1, 22);
+  P(ctx, '#2b2b35', x - 4, y - 27, 8, 3);
+  P(ctx, night ? '#fff6c8' : '#c9c4ad', x - 3, y - 24, 6, 1);
+}
+
+// ---------- character (4-direction walk cycle) ----------
+const look = { skin: '#cf9668', hair: '#1d1917', hoodie: '#7a1a20', hoodieDk: '#5a1016', jeans: '#2a3350', shoe: '#1a1a20' };
+function drawChar(x, y, dir, frame) {
+  x = Math.round(x); y = Math.round(y);
+  const step = [0, 1, 0, -1][frame], bob = frame % 2 ? 1 : 0, side = dir === 'left' || dir === 'right';
+  const flip = dir === 'left' ? -1 : 1;
+  ctx.fillStyle = 'rgba(0,0,0,.3)'; ctx.fillRect(x - 5, y - 1, 10, 2); ctx.fillRect(x - 4, y - 2, 8, 4);
+  const parts = [];
+  // legs
+  if (side) { parts.push([look.jeans, x - 2 + step, y - 6, 2, 5], [look.jeans, x - step, y - 6, 2, 5], [look.shoe, x - 2 + step, y - 2, 3, 2], [look.shoe, x - step, y - 2, 3, 2]); }
+  else { parts.push([look.jeans, x - 3, y - 6 + (step > 0 ? -1 : 0), 2, 5], [look.jeans, x + 1, y - 6 + (step < 0 ? -1 : 0), 2, 5], [look.shoe, x - 3, y - 2 + (step > 0 ? -1 : 0), 2, 2], [look.shoe, x + 1, y - 2 + (step < 0 ? -1 : 0), 2, 2]); }
+  const by = y - 13 + bob;
+  parts.push([look.hoodie, x - 4, by, 8, 8]);
+  if (!side) parts.push([look.hoodieDk, x - 6, by + 1 + step, 2, 6], [look.hoodieDk, x + 4, by + 1 - step, 2, 6], [look.skin, x - 6, by + 6 + step, 2, 1], [look.skin, x + 4, by + 6 - step, 2, 1]);
+  else parts.push([look.hoodieDk, x - 1 + step * flip, by + 1, 2, 6], [look.skin, x - 1 + step * flip, by + 6, 2, 1]);
+  const hy = by - 8;
+  parts.push([look.skin, x - 4, hy, 8, 8]);
+  if (dir === 'up') parts.push([look.hair, x - 4, hy - 1, 8, 8]);
+  else if (side) parts.push([look.hair, x - 4, hy - 1, 8, 3], [look.hair, flip > 0 ? x - 4 : x + 2, hy, 2, 6]);
+  else parts.push([look.hair, x - 4, hy - 1, 8, 3], [look.hair, x - 4, hy + 1, 1, 3], [look.hair, x + 3, hy + 1, 1, 3]);
+  // outline pass, then colour pass
+  for (const [, px, py, w, h] of parts) P(ctx, '#14101a', px - 1, py - 1, w + 2, h + 2);
+  for (const [c, px, py, w, h] of parts) P(ctx, c, px, py, w, h);
+  if (dir === 'down') { P(ctx, '#1d1917', x - 2, hy + 4); P(ctx, '#1d1917', x + 1, hy + 4); P(ctx, '#e0807a', x - 3, hy + 6); P(ctx, '#e0807a', x + 2, hy + 6); }
+  if (side) P(ctx, '#1d1917', x + 2 * flip, hy + 4);
+  if (dir !== 'up') P(ctx, '#f3c94b', x - 1, by + 3, 2, 1);           // hoodie logo
+}
+
+// ---------- state, input, loop ----------
+const me = { x: 240, y: 232, tx: 240, ty: 232, dir: 'down', t: 0 };
+let night = (() => { const h = new Date().getHours(); return h < 6 || h >= 18; })(), nightT = night ? 1 : 0;
+document.getElementById('night').onclick = () => night = !night;
+cv.addEventListener('click', e => {
+  const r = cv.getBoundingClientRect();
+  me.tx = Math.max(6, Math.min(W - 6, (e.clientX - r.left) * W / r.width));
+  me.ty = Math.max(166, Math.min(H - 2, (e.clientY - r.top) * H / r.height));
+});
+
+const bgDay = sprite(W, H, g => { paintGround(g); paintBuilding(g, false); });
+const bgNight = sprite(W, H, g => { paintGround(g); paintBuilding(g, true); });
+const dark = document.createElement('canvas'); dark.width = W; dark.height = H; const dg = dark.getContext('2d');
+const lights = [
+  ...lamps.map(([x, y]) => ({ x, y: y - 20, r: 46, a: 0.9 })),
+  ...windows.filter(w => w.lit).map(w => ({ x: w.x + 6, y: w.y + 8, r: 13, a: 0.8 })),
+  { x: 240, y: 140, r: 30, a: 0.9 },
+];
+
+function frame() {
+  // move
+  const dx = me.tx - me.x, dy = me.ty - me.y, dist = Math.hypot(dx, dy), moving = dist > 1;
+  if (moving) {
+    me.x += dx / dist * 1.1; me.y += dy / dist * 1.1; me.t++;
+    me.dir = Math.abs(dx) > Math.abs(dy) ? (dx > 0 ? 'right' : 'left') : (dy > 0 ? 'down' : 'up');
+  }
+  nightT += ((night ? 1 : 0) - nightT) * 0.05;
+
+  ctx.drawImage(nightT > 0.5 ? bgNight : bgDay, 0, 0);
+  const ents = [
+    ...trees.map(t => ({ y: t.y, draw: () => ctx.drawImage(t.spr, t.x - 17, t.y - 37) })),
+    ...lamps.map(([x, y]) => ({ y, draw: () => drawLamp(x, y, nightT > 0.5) })),
+    { y: me.y, draw: () => drawChar(me.x, me.y, me.dir, moving ? Math.floor(me.t / 7) % 4 : 0) },
+  ].sort((a, b) => a.y - b.y);
+  ents.forEach(e => e.draw());
+
+  // night: darken everything, then cut holes where lights are, then add warm glow
+  if (nightT > 0.01) {
+    dg.globalCompositeOperation = 'source-over';
+    dg.clearRect(0, 0, W, H);
+    dg.fillStyle = `rgba(12,16,46,${0.72 * nightT})`; dg.fillRect(0, 0, W, H);
+    dg.globalCompositeOperation = 'destination-out';
+    for (const l of lights) {
+      const gr = dg.createRadialGradient(l.x, l.y, 0, l.x, l.y, l.r);
+      gr.addColorStop(0, `rgba(0,0,0,${l.a})`); gr.addColorStop(1, 'rgba(0,0,0,0)');
+      dg.fillStyle = gr; dg.fillRect(l.x - l.r, l.y - l.r, l.r * 2, l.r * 2);
+    }
+    ctx.drawImage(dark, 0, 0);
+    ctx.globalCompositeOperation = 'lighter';
+    for (const l of lights) {
+      const gr = ctx.createRadialGradient(l.x, l.y, 0, l.x, l.y, l.r * 0.7);
+      gr.addColorStop(0, `rgba(255,190,110,${0.22 * nightT})`); gr.addColorStop(1, 'rgba(255,190,110,0)');
+      ctx.fillStyle = gr; ctx.fillRect(l.x - l.r, l.y - l.r, l.r * 2, l.r * 2);
+    }
+    ctx.globalCompositeOperation = 'source-over';
+  }
+  requestAnimationFrame(frame);
+}
+frame();
+</script>
+</body>
+</html>

@@ -1,0 +1,5 @@
+**/node_modules
+campus/dist
+.playwright-mcp
+_hidden
+server/.prof

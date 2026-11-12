@@ -1,0 +1,41 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Pixel FAST</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Pixelify+Sans:wght@400;600&family=Silkscreen&display=swap" rel="stylesheet">
+</head>
+<body>
+<canvas id="c"></canvas>
+<div id="hud">
+  <div class="panel" id="title"><b>FAST NUCES</b><span>ISLAMABAD CAMPUS</span></div>
+  <button class="panel" id="meBtn" aria-label="Edit your student"><canvas width="16" height="26"></canvas><span>You</span></button>
+  <div class="panel" id="clock">--:--</div>
+  <div class="panel" id="net" data-state="offline" role="status">…</div>
+  <button class="panel" id="nightBtn">Night</button>
+  <button class="panel hidden" id="floorsBtn">Floors</button>
+  <button class="panel hidden" id="exitBtn">Exit building</button>
+</div>
+<div id="near" class="panel hidden"></div>
+<div id="bottom">
+  <select id="goto" class="panel" aria-label="Go to a place"><option value="">Go to…</option></select>
+  <div class="panel" id="hint"></div>
+</div>
+<div id="chat" class="panel">
+  <div id="chatLog" aria-live="polite"></div>
+  <div class="chat-row"><input id="chatInput" class="panel" autocomplete="off" aria-label="Chat message" placeholder="Say something to people near you…"><button class="panel" id="chatSend">Send</button></div>
+  <div id="chatHint"></div>
+</div>
+<canvas id="mini"></canvas>
+<div id="menu" class="panel hidden" role="dialog" aria-label="Choose a floor">
+  <h2>Floors</h2>
+  <div class="floors"></div>
+  <div class="row"><button class="panel" id="menuExit">Exit to campus</button><button class="panel" id="menuClose">Close</button></div>
+</div>
+<div id="avatar" class="panel hidden" role="dialog" aria-label="Make your student"></div>
+<div id="loading">Building campus…</div>
+<script type="module" src="/src/main.js"></script>
+</body>
+</html>
