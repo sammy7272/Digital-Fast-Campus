@@ -299,6 +299,10 @@ export function buildCampus() {
     blockSolid(X - 5, Y - 2, 11, 2);
   }
   const emitCv = mk(W, H); emitCv.getContext('2d').putImageData(emit, 0, 0);
+  // occluder: the building pixels alone, drawn over anything standing behind a building (e.g. cars on the road behind C/D)
+  const occ = mk(W, H);
+  { const src = bg.getImageData(0, 0, W, H), d = src.data; for (let i = 0; i < W * H; i++) if (bid[i] < 0) d[i * 4 + 3] = 0; occ.getContext('2d').putImageData(src, 0, 0); }
+  const behind = (x, y) => { const X = Math.round(x), Y = Math.round(y); return X >= 0 && Y >= 0 && X < W && Y < H && bid[Y * W + X] >= 0; };
 
   // overhead: skybridge, gate beams, solar canopies
   const over = mk(W, H), og = over.getContext('2d');
@@ -435,7 +439,7 @@ export function buildCampus() {
 
   return {
     id: 'campus', title: 'FAST NUCES', sub: 'ISLAMABAD CAMPUS', outdoor: true, minimap: true,
-    W, H, bg: base, over, emit: emitCv, ents, free, triggers, spawns, places, labels,
+    W, H, bg: base, over, emit: emitCv, occ, behind, ents, free, triggers, spawns, places, labels,
     step() { cars.forEach(stepCar); npcs.forEach(stepNpc); },
   };
 }

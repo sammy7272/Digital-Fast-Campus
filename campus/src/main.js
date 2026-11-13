@@ -235,11 +235,17 @@ function frame() {
   const L = camX - 70, R = camX + vw + 70, T = camY - 10, B = camY + vh + 110, list = [];
   for (const e of scene.ents) if (e.x > L && e.x < R && e.y > T && e.y < B) list.push(e);
   for (const r of net.remotes.values()) if (Number.isFinite(r.x) && r.x > L && r.x < R && r.y > T && r.y < B)
-    list.push({ y: r.y, draw: c => person(c, r.x, r.y, DIRS[r.d], r.m ? Math.floor(r.t / 7) % 4 : 0, r.look) });
-  const meEnt = { y: me.y, draw: c => person(c, me.x, me.y, me.dir, moving ? Math.floor(me.t / 7) % 4 : 0, me.look) };
+    list.push({ x: r.x, y: r.y, draw: c => person(c, r.x, r.y, DIRS[r.d], r.m ? Math.floor(r.t / 7) % 4 : 0, r.look) });
+  const meEnt = { x: me.x, y: me.y, draw: c => person(c, me.x, me.y, me.dir, moving ? Math.floor(me.t / 7) % 4 : 0, me.look) };
   list.push(meEnt);
   list.sort((a, b) => a.y - b.y);
-  for (const e of list) e.draw(ctx, isN);
+  // things standing behind a building (their feet are under its roof/walls) are drawn first, then the building over them
+  const hiddenSet = scene.behind ? new Set(list.filter(e => scene.behind(e.x, e.y))) : null;
+  if (hiddenSet && hiddenSet.size) {
+    for (const e of list) if (hiddenSet.has(e)) e.draw(ctx, isN);
+    ctx.drawImage(scene.occ, sx, sy, sw, sh, sx, sy, sw, sh);
+  }
+  for (const e of list) if (!hiddenSet || !hiddenSet.has(e)) e.draw(ctx, isN);
   const X = Math.round(me.x), Y = Math.round(me.y), bob = Math.floor(performance.now() / 300) % 2;
   P(ctx, '#1a1620', X - 3, Y - 26 + bob, 7, 4); P(ctx, '#5fd3a4', X - 2, Y - 25 + bob, 5, 2); P(ctx, '#5fd3a4', X - 1, Y - 23 + bob, 3, 1);
   if (scene.over) ctx.drawImage(scene.over, sx, sy, sw, sh, sx, sy, sw, sh);
